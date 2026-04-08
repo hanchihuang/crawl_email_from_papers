@@ -8,6 +8,7 @@ import json
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
@@ -16,6 +17,7 @@ import fitz
 import requests
 
 
+ARXIV_API_URL = "http://export.arxiv.org/api/query"
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -31,12 +33,29 @@ OBFUSCATED_EMAIL_RE = re.compile(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Download paper PDFs or read local PDFs, then extract author emails."
+        description="Crawl papers from arXiv or use explicit PDF inputs, then extract author emails."
     )
     parser.add_argument(
         "inputs",
         nargs="*",
-        help="arXiv id, arXiv URL, direct PDF URL, local PDF path, or a .txt file with one item per line",
+        help="Optional explicit inputs: arXiv id, arXiv URL, direct PDF URL, local PDF path, or a .txt file",
+    )
+    parser.add_argument(
+        "--query",
+        default="",
+        help="arXiv search query, for example: cat:cs.LG or all:diffusion model",
+    )
+    parser.add_argument(
+        "--start",
+        type=int,
+        default=0,
+        help="arXiv result offset. Default: 0",
+    )
+    parser.add_argument(
+        "--max-results",
+        type=int,
+        default=10,
+        help="How many papers to crawl from arXiv. Default: 10",
     )
     parser.add_argument(
         "--max-pages",
@@ -86,6 +105,50 @@ def load_inputs(raw_inputs: list[str]) -> list[str]:
             seen.add(item)
             deduped.append(item)
     return deduped
+
+
+def crawl_arxiv_inputs(query: str, start: int, max_results: int, timeout: int) -> list[dict]:
+    params = {
+        "search_query": query,
+        "start": start,
+        "max_results": max_results,
+        "sortBy": "submittedDate",
+        "sortOrder": "descending",
+    }
+    response = requests.get(ARXIV_API_URL, params=params, headers=HEADERS, timeout=timeout)
+    response.raise_for_status()
+    root = ET.fromstring(response.text)
+    ns = {
+        "atom": "http://www.w3.org/2005/Atom",
+        "arxiv": "http://arxiv.org/schemas/atom",
+    }
+    crawled: list[dict] = []
+    for entry in root.findall("atom:entry", ns):
+        id_text = (entry.findtext("atom:id", default="", namespaces=ns) or "").strip()
+        title = re.sub(r"\s+", " ", entry.findtext("atom:title", default="", namespaces=ns) or "").strip()
+        published = (entry.findtext("atom:published", default="", namespaces=ns) or "").strip()
+        pdf_url = ""
+        for link in entry.findall("atom:link", ns):
+            href = (link.attrib.get("href") or "").strip()
+            title_attr = (link.attrib.get("title") or "").strip().lower()
+            if title_attr == "pdf" or href.endswith(".pdf"):
+                pdf_url = href if href.endswith(".pdf") else f"{href}.pdf"
+                break
+        if not pdf_url and id_text:
+            pdf_url = id_text.replace("/abs/", "/pdf/") + ".pdf"
+        if not pdf_url:
+            continue
+        crawled.append(
+            {
+                "input": pdf_url,
+                "crawl_source": "arxiv",
+                "crawl_query": query,
+                "paper_id": id_text,
+                "paper_title": title,
+                "published": published,
+            }
+        )
+    return crawled
 
 
 def is_probably_url(value: str) -> bool:
@@ -215,18 +278,32 @@ def infer_title(pdf_path: Path, text: str) -> str:
     return pdf_path.stem
 
 
-def process_one(item: str, cache_dir: Path, max_pages: int, timeout: int) -> dict:
-    pdf_path, source = ensure_pdf(item, cache_dir, timeout)
+def process_one(item: str | dict, cache_dir: Path, max_pages: int, timeout: int) -> dict:
+    raw_input = item["input"] if isinstance(item, dict) else item
+    pdf_path, source = ensure_pdf(raw_input, cache_dir, timeout)
     text = extract_text(pdf_path, max_pages=max_pages)
     emails = extract_emails(text)
-    return {
-        "input": item,
+    result = {
+        "input": raw_input,
         "source": source,
         "pdf_path": str(pdf_path),
         "title": infer_title(pdf_path, text),
         "emails": emails,
         "email_count": len(emails),
     }
+    if isinstance(item, dict):
+        result.update(
+            {
+                "crawl_source": item.get("crawl_source", ""),
+                "crawl_query": item.get("crawl_query", ""),
+                "paper_id": item.get("paper_id", ""),
+                "paper_title": item.get("paper_title", ""),
+                "published": item.get("published", ""),
+            }
+        )
+        if item.get("paper_title"):
+            result["title"] = item["paper_title"]
+    return result
 
 
 def write_csv(rows: Iterable[dict], out_path: Path) -> None:
@@ -234,16 +311,31 @@ def write_csv(rows: Iterable[dict], out_path: Path) -> None:
     with out_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["input", "title", "email_count", "emails", "source", "pdf_path"],
+            fieldnames=[
+                "input",
+                "paper_id",
+                "title",
+                "published",
+                "email_count",
+                "emails",
+                "crawl_source",
+                "crawl_query",
+                "source",
+                "pdf_path",
+            ],
         )
         writer.writeheader()
         for row in rows:
             writer.writerow(
                 {
                     "input": row["input"],
+                    "paper_id": row.get("paper_id", ""),
                     "title": row["title"],
+                    "published": row.get("published", ""),
                     "email_count": row["email_count"],
                     "emails": "; ".join(row["emails"]),
+                    "crawl_source": row.get("crawl_source", ""),
+                    "crawl_query": row.get("crawl_query", ""),
                     "source": row["source"],
                     "pdf_path": row["pdf_path"],
                 }
@@ -252,9 +344,19 @@ def write_csv(rows: Iterable[dict], out_path: Path) -> None:
 
 def main() -> int:
     args = parse_args()
-    items = load_inputs(args.inputs)
+    items: list[str | dict] = []
+    if args.query:
+        items.extend(
+            crawl_arxiv_inputs(
+                query=args.query,
+                start=args.start,
+                max_results=args.max_results,
+                timeout=args.timeout,
+            )
+        )
+    items.extend(load_inputs(args.inputs))
     if not items:
-        print("No inputs provided.", file=sys.stderr)
+        print("No inputs provided. Use --query for arXiv crawling or pass explicit PDF inputs.", file=sys.stderr)
         return 2
 
     cache_dir = Path(args.cache_dir).expanduser()
@@ -267,12 +369,13 @@ def main() -> int:
             result = process_one(item, cache_dir=cache_dir, max_pages=args.max_pages, timeout=args.timeout)
             results.append(result)
             email_text = ", ".join(result["emails"]) if result["emails"] else "(none)"
-            print(f"[ok] {item} -> {email_text}", file=sys.stderr)
+            print(f"[ok] {result['input']} -> {email_text}", file=sys.stderr)
         except Exception as exc:
-            print(f"[error] {item}: {exc}", file=sys.stderr)
+            item_value = item["input"] if isinstance(item, dict) else item
+            print(f"[error] {item_value}: {exc}", file=sys.stderr)
             results.append(
                 {
-                    "input": item,
+                    "input": item_value,
                     "source": "",
                     "pdf_path": "",
                     "title": "",
