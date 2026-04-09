@@ -1,15 +1,19 @@
 # Quant Finance Email Crawler
 
-自动从多个学术来源抓取量化金融论文，提取作者邮箱，用于科研合作 outreach。
+自动从多个学术来源抓取量化金融论文，提取作者邮箱，并支持一键自动发邮件，用于科研合作 outreach。
 
-## 支持的数据源
+## 当前已启用的数据源
 
 | 来源 | 说明 | 状态 |
 |------|------|------|
-| arXiv | 量化金融 (q-fin.*)、经济学 (econ.GN) 分类 | ✅ |
-| SSRN | 社会科学研究网络预印本 | ✅ |
-| RePEc | 经济研究论文，包含 NEP 金融系列 | ✅ |
-| Google Scholar | 通过 Scholarly API 查找作者邮箱 | ✅ |
+| arXiv | 量化金融 (q-fin.*)、经济学 (econ.GN) 分类 | 已启用 |
+| Crossref | 学术论文元数据与 DOI 检索 | 已启用 |
+| Google Scholar | 作为邮箱补充查找渠道，不是主抓取源 | 辅助启用 |
+
+说明：
+
+- `SSRN` 和 `RePEc` 代码文件目前存在，但默认没有加入实际运行管线
+- README 以下说明均以“当前默认启用 arXiv + Crossref”为准
 
 ## 快速开始
 
@@ -124,7 +128,7 @@ git add . && git commit -m "update" && git push
 
 ## 邮箱提取策略
 
-1. **论文元数据** - 从 arXiv/SSRN/RePEc 的 abstract 和 author 字段中搜索邮箱正则
+1. **论文元数据** - 从当前已启用来源（默认是 arXiv / Crossref）的 abstract 和 author 字段中搜索邮箱正则
 2. **论文详情页** - 抓取 HTML 页面，用 BeautifulSoup 提取 `mailto:` 链接
 3. **arXiv 作者页** - 访问 arXiv 作者主页查找邮箱
 4. **Scholarly API** - 对每个作者名搜索 Google Scholar，找关联邮箱
@@ -150,8 +154,9 @@ quant_finance_email_crawler/
 ├── src/
 │   ├── scrapers/           # 论文来源爬虫
 │   │   ├── arxiv_scraper.py
-│   │   ├── ssrn_scraper.py
-│   │   └── repec_scraper.py
+│   │   ├── crossref_scraper.py
+│   │   ├── ssrn_scraper.py         # 代码存在，默认未启用
+│   │   └── repec_scraper.py        # 代码存在，默认未启用
 │   ├── extractors/         # 邮箱提取
 │   │   ├── email_extractor.py
 │   │   └── scholarly_client.py
@@ -179,3 +184,4 @@ quant_finance_email_crawler/
 - 邮件 outreach 遵守 CAN-SPAM / GDPR 规定
 - 建议先用 `--dry-run` 确认邮件内容后再发送
 - `push GitHub` 前请先确认当前目录已经 `git init` 并配置好 `origin`
+- 当前默认抓取源不是 “arXiv + SSRN + RePEc 全开”，而是以代码实际启用项为准
