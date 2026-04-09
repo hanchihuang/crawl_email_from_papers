@@ -206,7 +206,8 @@ def send_campaign(
     backend_name,
     from_name,
     sender_pool=None,
-    max_emails=50,
+    start_index=1,
+    max_emails=0,
     delay=5,
     dry_run=True,
     subject_template=None,
@@ -225,9 +226,12 @@ def send_campaign(
 
     authors = normalize_authors(load_json(authors_file))
     emit("info", f"Loaded {len(authors)} authors from {authors_file}")
+    start_index = max(1, int(start_index or 1))
+    emit("info", f"Starting from recipient #{start_index}")
 
     sent = 0
     failed = 0
+    recipient_index = 0
 
     for author in authors:
         email = extract_author_email(author)
@@ -238,11 +242,15 @@ def send_campaign(
         if not email or "@" not in email:
             continue
 
+        recipient_index += 1
+        if recipient_index < start_index:
+            continue
+
         if dry_run:
             active_from = sender_pool.next_email() if sender_pool else getattr(sender, "from_email", "")
             emit("info", f"[DRY RUN] Would send to: {name} <{email}> via {backend_name} from {active_from}")
             sent += 1
-            if sent >= max_emails:
+            if max_emails > 0 and sent >= max_emails:
                 emit("info", f"Reached max emails limit ({max_emails})")
                 break
             continue
@@ -285,7 +293,7 @@ def send_campaign(
                 emit("error", "Freemail 后端未配置 Resend API Key，停止当前批次")
                 break
 
-        if sent >= max_emails:
+        if max_emails > 0 and sent >= max_emails:
             emit("info", f"Reached max emails limit ({max_emails})")
             break
 
@@ -306,8 +314,10 @@ def main():
                         help="Dry run (don't actually send)")
     parser.add_argument("--live", action="store_true",
                         help="Actually send emails (requires --dry-run off)")
-    parser.add_argument("--max", type=int, default=50,
-                        help="Max emails to send")
+    parser.add_argument("--max", type=int, default=0,
+                        help="Max emails to send; 0 means unlimited")
+    parser.add_argument("--start-index", type=int, default=1,
+                        help="Start sending from the Nth valid recipient (1-based)")
     parser.add_argument("--delay", type=int, default=5,
                         help="Seconds between emails")
     parser.add_argument("--authors", type=str, default=None,
@@ -357,7 +367,8 @@ def main():
     print(f"  Email Campaign")
     print(f"  ===============================")
     print(f"  Authors file  : {authors_file}")
-    print(f"  Max emails   : {args.max}")
+    print(f"  Start index  : {args.start_index}")
+    print(f"  Max emails   : {'unlimited' if args.max <= 0 else args.max}")
     print(f"  Mode         : {'DRY RUN' if dry_run else 'LIVE'}")
     print(f"  Backend      : {meta['backend']}")
     print(f"  Sender       : {meta['default_from_email']}")
@@ -374,6 +385,7 @@ def main():
         meta["backend"],
         from_name,
         sender_pool=sender_pool,
+        start_index=args.start_index,
         max_emails=args.max,
         delay=args.delay,
         dry_run=dry_run,

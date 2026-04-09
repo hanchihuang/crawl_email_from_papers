@@ -110,7 +110,11 @@ def render_page(values: dict, message: str = "", logs: str = "") -> str:
           </div>
           <div>
             <label>最大发送数</label>
-            <input type="number" name="max_emails" min="1" value="{html.escape(values.get("max_emails", "50"))}">
+            <input type="number" name="max_emails" min="0" value="{html.escape(values.get("max_emails", "0"))}">
+          </div>
+          <div>
+            <label>从第几个邮箱开始</label>
+            <input type="number" name="start_email_index" min="1" value="{html.escape(values.get("start_email_index", "1"))}">
           </div>
           <div>
             <label>发送间隔（秒）</label>
@@ -222,7 +226,8 @@ def default_form_values() -> dict:
         "body": PLAIN_TEMPLATE,
         "html_body": HTML_TEMPLATE,
         "backend": "freemail",
-        "max_emails": "50",
+        "max_emails": "0",
+        "start_email_index": "1",
         "delay": "5",
         "from_name": "Quant Finance Research",
         "from_pool": "on",
@@ -291,7 +296,8 @@ def run_campaign_from_form(values: dict, progress_callback=None) -> tuple[str, l
     backend = values.get("backend", "freemail")
     dry_run = bool(values.get("dry_run"))
     from_pool_enabled = bool(values.get("from_pool"))
-    max_emails = int(values.get("max_emails", "50") or "50")
+    max_emails = int(values.get("max_emails", "0") or "0")
+    start_email_index = max(1, int(values.get("start_email_index", "1") or "1"))
     delay = int(values.get("delay", "5") or "5")
     log_lines: list[str] = []
 
@@ -338,6 +344,7 @@ def run_campaign_from_form(values: dict, progress_callback=None) -> tuple[str, l
         backend_name=meta["backend"],
         from_name=values.get("from_name") or freemail_config.get("from_name") or "Quant Finance Research",
         sender_pool=sender_pool,
+        start_index=start_email_index,
         max_emails=max_emails,
         delay=delay,
         dry_run=dry_run,
