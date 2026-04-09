@@ -1,2 +1,12 @@
-PyMuPDF>=1.24.0
-requests>=2.31.0
+requests==2.32.3
+beautifulsoup4==4.12.3
+feedparser==6.0.12
+scholarly==1.7.11
+arxiv==2.4.1
+boto3==1.37.38
+python-dotenv==1.0.1
+aiosmtplib==5.1.0
+httpx==0.28.1
+lxml==5.4.0
+bibtexparser==1.4.4
+uvloop==0.20.0

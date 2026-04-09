@@ -1,159 +1,181 @@
-# crawl_email_from_papers
+# Quant Finance Email Crawler
 
-一个先爬论文、再抓作者邮箱的 Python 工具。
+自动从多个学术来源抓取量化金融论文，提取作者邮箱，用于科研合作 outreach。
 
-核心流程不是“手工指定每篇论文”，而是：
+## 支持的数据源
 
-1. 先从 arXiv 按关键词或分类爬取论文列表
-2. 自动下载这些论文的 PDF
-3. 扫描首页和前几页文本
-4. 提取作者公开邮箱
-5. 导出 CSV / JSON
+| 来源 | 说明 | 状态 |
+|------|------|------|
+| arXiv | 量化金融 (q-fin.*)、经济学 (econ.GN) 分类 | ✅ |
+| SSRN | 社会科学研究网络预印本 | ✅ |
+| RePEc | 经济研究论文，包含 NEP 金融系列 | ✅ |
+| Google Scholar | 通过 Scholarly API 查找作者邮箱 | ✅ |
 
-另外也保留了“手工补充输入”的能力，方便你对单篇论文或本地 PDF 做补抓。
+## 快速开始
 
-适合场景：
-
-- 按关键词批量爬论文并整理作者邮箱
-- 按 arXiv 分类持续抓取新论文联系人
-- 批量找论文作者邮箱
-- 对本地保存的论文 PDF 做补充整理
-
-## 功能
-
-- 支持从 arXiv 自动爬论文：
-  - 关键词查询，例如 `all:diffusion model`
-  - 分类查询，例如 `cat:cs.LG`
-  - 可指定抓取数量和起始偏移
-- 支持补充显式输入：
-  - arXiv ID，例如 `2401.12345`
-  - arXiv 摘要页链接，例如 `https://arxiv.org/abs/2401.12345`
-  - 直接 PDF 链接
-  - 本地 PDF 文件
-  - `.txt` 列表文件，一行一个输入
-- 自动缓存下载下来的 PDF 到 `.cache/pdfs/`
-- 默认只扫描前 3 页，速度更快，也更符合作者邮箱通常出现在首页的实际情况
-- 同时处理标准邮箱和常见混淆写法，例如 `name (at) school (dot) edu`
-- 输出 `CSV`，可选输出 `JSON`
-
-## 安装
+### 1. 安装依赖
 
 ```bash
-git clone https://github.com/hanchihuang/crawl_email_from_papers.git
-cd crawl_email_from_papers
-python3 -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-如果你的系统安装了 `pdftotext`，当 `PyMuPDF` 对某些 PDF 提取失败时，脚本会自动回退使用它。
-
-Ubuntu / Debian:
+### 2. 配置环境
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y poppler-utils
+cp .env.example .env
+# 编辑 .env，填入 SMTP 配置
 ```
 
-## 用法
+SMTP 推荐使用 Gmail + App Password，或 SendGrid / AWS SES。
 
-### 1. 从 arXiv 自动爬论文再抓邮箱
+### 3. 运行爬虫
 
 ```bash
-python crawl_email_from_papers.py \
-  --query 'cat:cs.LG' \
-  --max-results 20 \
-  --out results/cs_lg_emails.csv
+# 默认抓取（每个源最多 100 篇，不下载 PDF）
+python run_crawler.py
+
+# 增加论文数量
+python run_crawler.py --max-papers 200
+
+# 下载 PDF 并从中提取邮箱
+python run_crawler.py --max-papers 100
+
+# 强制清理已下载的论文
+python run_crawler.py --force-cleanup
+
+# 查看磁盘使用
+python run_crawler.py --check-disk
 ```
 
-### 2. 按关键词爬论文
+### 4. 发送邮件
 
 ```bash
-python crawl_email_from_papers.py \
-  --query 'all:diffusion model' \
-  --max-results 10 \
-  --json-out results/diffusion.json
+# 先 dry-run 查看效果
+python send_emails.py --dry-run --max 10
+
+# 确认无误后正式发送
+python send_emails.py --live --max 50
 ```
 
-### 3. 爬虫模式和手工输入混合使用
+### 4.1 一键发送邮件
+
+项目已经内置两种“一键发送”方式：
 
 ```bash
-python crawl_email_from_papers.py \
-  --query 'cat:cs.CL' \
-  --max-results 5 \
-  ./papers/local_paper.pdf \
-  2401.12345
+# 命令行一键群发
+python send_emails.py --live --max 50
+
+# 启动本地网页控制台，一键点击执行群发
+python web_app.py
 ```
 
-### 4. 从文本文件批量读取补充输入
+启动 `web_app.py` 后，在浏览器打开页面，填好标题、正文、发送后端和数量，点击“执行群发”即可。
 
-`papers.txt`:
+支持：
 
-```text
-2401.12345
-https://arxiv.org/abs/2402.00001
-./papers/sample.pdf
-```
+- `SMTP` 直连发送
+- `freemail` API 发送
+- `dry-run` 预演
+- 发件池轮换发送
 
-运行：
+如果只想先测试流程，建议先执行：
 
 ```bash
-python crawl_email_from_papers.py papers.txt
+python send_emails.py --dry-run --max 10
 ```
 
-### 5. 指定输出路径
+### 4.2 一键 push GitHub
+
+当前目录默认不是 Git 仓库；如果你要把这个项目一键推到 GitHub，先完成一次初始化或接入已有远端。
+
+首次初始化示例：
 
 ```bash
-python crawl_email_from_papers.py --query 'cat:cs.AI' \
-  --out results/emails.csv \
-  --json-out results/emails.json
+git init
+git branch -M main
+git remote add origin https://github.com/<your-name>/quant_finance_email_crawler.git
 ```
 
-### 6. 调整扫描页数
+之后可直接用一条命令完成 add、commit、push：
 
 ```bash
-python crawl_email_from_papers.py --query 'cat:cs.LG' --max-results 10 --max-pages 5
+git add . && git commit -m "update quant_finance_email_crawler" && git push -u origin main
 ```
 
-## 输出格式
-
-CSV 字段：
-
-- `input`: 原始输入
-- `paper_id`: 论文 ID，爬虫模式下通常是 arXiv 详情页
-- `title`: 论文标题
-- `published`: 发布时间
-- `email_count`: 提取到的邮箱数量
-- `emails`: 以 `; ` 分隔的邮箱列表
-- `crawl_source`: 论文来源，当前是 `arxiv`
-- `crawl_query`: 本次使用的抓取查询词
-- `source`: `local` 或下载 URL
-- `pdf_path`: 本地 PDF 路径
-
-JSON 会保留更完整的结构化结果。
-
-## 示例输出
-
-```csv
-input,paper_id,title,published,email_count,emails,crawl_source,crawl_query,source,pdf_path
-https://arxiv.org/pdf/2401.12345.pdf,https://arxiv.org/abs/2401.12345,Example Paper Title,2024-01-11T00:00:00Z,2,alice@uni.edu; bob@lab.org,arxiv,cat:cs.LG,https://arxiv.org/pdf/2401.12345.pdf,.cache/pdfs/xxxx_paper.pdf
-```
-
-## 说明和限制
-
-- 默认主路径是“先爬论文，再抽邮箱”，不是要求你手工逐篇指定。
-- 当前自动爬取来源先接了 arXiv；如果你后面要接 ACL Anthology、OpenReview、Semantic Scholar，再往上加源就行。
-- 默认策略是扫首页和前几页，所以更偏向提取作者公开邮箱，不会保证覆盖论文正文深处的所有联系方式。
-- 对纯扫描版 PDF、图片型 PDF，提取质量取决于 PDF 自带文本层；当前没有集成 OCR。
-- 邮箱提取基于规则，偶尔会有误报或漏报，尤其是排版破碎、字符断裂严重的 PDF。
-
-## 快速测试
+如果已经配置过远端，后续日常更新只需要：
 
 ```bash
-python crawl_email_from_papers.py \
-  --query 'cat:cs.LG' \
-  --max-results 3 \
-  --json-out emails.json
+git add . && git commit -m "update" && git push
 ```
 
-运行后会先爬到论文，再生成默认 `emails.csv`，并把每篇论文抽到的邮箱打印到标准错误输出。
+## 工作流程
+
+```
+1. 爬虫抓取论文元数据 (标题/作者/摘要/URL)
+       ↓
+2. 从论文页面 + PDF 提取作者邮箱
+       ↓
+3. 邮箱去重后存入 data/authors/authors.json
+       ↓
+4. PDF 下载后立即自动删除 (默认开启)
+       ↓
+5. 从 authors.json 读取作者列表发送邮件
+```
+
+## 邮箱提取策略
+
+1. **论文元数据** - 从 arXiv/SSRN/RePEc 的 abstract 和 author 字段中搜索邮箱正则
+2. **论文详情页** - 抓取 HTML 页面，用 BeautifulSoup 提取 `mailto:` 链接
+3. **arXiv 作者页** - 访问 arXiv 作者主页查找邮箱
+4. **Scholarly API** - 对每个作者名搜索 Google Scholar，找关联邮箱
+5. **PDF 正文** - 下载 PDF 用 pdftotext 提取全文，再正则匹配邮箱
+
+> 策略 1-3 不下载 PDF，最快；策略 5 需要下载 PDF。
+
+## 邮件发送频率控制
+
+- 默认每小时最多 50 封 (MAX_EMAILS_PER_HOUR)
+- 每封邮件间隔 3-8 秒随机延迟
+- 支持 Gmail/App Password、SMTP relay、SendGrid 等任何 SMTP 服务
+
+## 文件结构
+
+```
+quant_finance_email_crawler/
+├── run_crawler.py          # 主入口：运行爬虫
+├── send_emails.py          # 命令行一键邮件发送
+├── web_app.py              # 本地网页群发控制台
+├── requirements.txt
+├── .env.example            # 配置模板
+├── src/
+│   ├── scrapers/           # 论文来源爬虫
+│   │   ├── arxiv_scraper.py
+│   │   ├── ssrn_scraper.py
+│   │   └── repec_scraper.py
+│   ├── extractors/         # 邮箱提取
+│   │   ├── email_extractor.py
+│   │   └── scholarly_client.py
+│   ├── emailer/            # 邮件发送
+│   │   └── sender.py
+│   ├── storage/            # PDF 存储与清理
+│   │   └── paper_storage.py
+│   ├── utils/
+│   │   └── config.py
+│   └── crawler.py          # 主编排器
+└── data/
+    ├── papers/             # 临时 PDF（自动清理）
+    ├── authors/
+    │   ├── authors.json    # 最终作者+邮箱数据
+    │   ├── processed.txt   # 已处理的论文 ID
+    │   └── email_queue.json
+    └── logs/
+        └── crawler.log
+```
+
+## 注意事项
+
+- 论文 PDF 下载后默认**立即删除**，节省磁盘空间
+- 遵守各平台 robots.txt 和使用条款
+- 邮件 outreach 遵守 CAN-SPAM / GDPR 规定
+- 建议先用 `--dry-run` 确认邮件内容后再发送
+- `push GitHub` 前请先确认当前目录已经 `git init` 并配置好 `origin`

@@ -1,0 +1,6 @@
+2026-04-08 16:45:49 | INFO     | test | [ArxivScraper] Fetching arXiv category: q-fin.ST
+2026-04-08 16:45:50 | INFO     | test | [ArxivScraper] Fetched 0 papers from arXiv
+2026-04-08 16:48:10 | INFO     | test | [ArxivScraper] Fetching arXiv category: q-fin.ST
+2026-04-08 16:48:11 | INFO     | test | [ArxivScraper] Fetched 19 finance-related papers from arXiv
+2026-04-08 16:49:05 | INFO     | test | [ArxivScraper] Fetching arXiv category: q-fin.ST
+2026-04-08 16:49:07 | INFO     | test | [ArxivScraper] Fetched 5 finance-related papers from arXiv

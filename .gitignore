@@ -1,6 +1,0 @@
-.cache/
-__pycache__/
-*.pyc
-results/
-emails.csv
-emails.json
