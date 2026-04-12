@@ -1,4 +1,4 @@
-"""arXiv scraper - uses official arXiv API with keyword post-filtering."""
+"""arXiv scraper for high-frequency trading papers."""
 import re
 import time
 import urllib.parse
@@ -12,17 +12,19 @@ class ArxivScraper(BaseScraper):
 
     BASE_URL = "http://export.arxiv.org/api/query"
 
-    FINANCE_KEYWORDS = [
-        "quant", "portfolio", "trading", "factor", "option", "risk",
-        "asset pricing", "stock", "bond", "derivative", "financial",
-        "investment", "returns", "volatility", "market", "price",
-        "machine learning", "deep learning", "neural", "reinforcement",
-        "high frequency", "liquidity", "liquidation", "arbitrage",
-        "cryptocurrency", "crypto", "blockchain", "fintech",
-        "alpha", "beta", "smart beta", "etf", "futures", "swaption",
-        "covariance", "correlation", "regression", "prediction",
-        "natural language", "sentiment", "text mining",
-        "ESG", "green", "sustainable",
+    HFT_KEYWORDS = [
+        "high frequency trading", "high-frequency trading", "high frequency",
+        "algorithmic trading", "algo trading", "electronic trading",
+        "market microstructure", "limit order book", "order book",
+        "lob", "order flow", "trade flow", "tick data",
+        "ultra low latency", "low latency", "latency arbitrage",
+        "statistical arbitrage", "arbitrage", "market making",
+        "optimal execution", "execution cost", "execution strategy",
+        "slippage", "price impact", "liquidity", "bid ask spread",
+        "bid-ask spread", "quote imbalance", "microprice",
+        "mid price", "mid-price", "transaction cost",
+        "intraday", "tick-by-tick", "matching engine",
+        "order imbalance", "fill probability",
     ]
 
     def __init__(self, categories: list[str], rate_limiter=None, **kwargs):
@@ -59,10 +61,10 @@ class ArxivScraper(BaseScraper):
                 if not batch:
                     break
 
-                # Post-filter: keep only finance-related papers
+                # Post-filter: keep only high-frequency trading related papers.
                 for p in batch:
                     combined = (p.title + " " + p.abstract).lower()
-                    if any(kw.lower() in combined for kw in self.FINANCE_KEYWORDS):
+                    if any(kw.lower() in combined for kw in self.HFT_KEYWORDS):
                         if p.paper_id not in self._processed_ids:
                             papers.append(p)
                             self._processed_ids.add(p.paper_id)
@@ -75,7 +77,7 @@ class ArxivScraper(BaseScraper):
                 else:
                     time.sleep(self._random_sleep())
 
-        self.log("INFO", f"Fetched {len(papers)} finance-related papers from arXiv")
+        self.log("INFO", f"Fetched {len(papers)} high-frequency trading papers from arXiv")
         return papers
 
     def _fetch_url(self, url: str) -> Optional[str]:

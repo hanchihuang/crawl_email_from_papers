@@ -21,7 +21,7 @@ class Config:
     ARXIV_CATEGORIES = [
         c.strip() for c in os.getenv(
             "ARXIV_CATEGORIES",
-            "econ.GN,q-fin.GN,q-fin.CP,q-fin.ST,q-fin.PM,q-fin.TR"
+            "q-fin.TR,q-fin.ST,q-fin.CP,cs.LG,stat.ML"
         ).split(",")
     ]
 

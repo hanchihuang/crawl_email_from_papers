@@ -148,6 +148,38 @@ class SendEmailsHelpersTest(unittest.TestCase):
 
     @patch("send_emails.EmailQueue")
     @patch("send_emails.setup_logger")
+    def test_send_campaign_honors_start_index_in_dry_run(self, mock_logger_factory, mock_queue_cls):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            authors_path = Path(tmpdir) / "authors.json"
+            authors_path.write_text(
+                """[
+                    {"name": "A", "email": "a@example.com", "papers": []},
+                    {"name": "B", "email": "b@example.com", "papers": []},
+                    {"name": "C", "email": "c@example.com", "papers": []}
+                ]""",
+                encoding="utf-8",
+            )
+            logger = mock_logger_factory.return_value
+
+            result = send_campaign(
+                sender=object(),
+                authors_file=authors_path,
+                backend_name="freemail",
+                from_name="Tester",
+                sender_pool=SenderPool(["one@ai-tool.indevs.in"]),
+                start_index=2,
+                max_emails=1,
+                delay=0,
+                dry_run=True,
+            )
+
+            self.assertEqual(result["sent"], 1)
+            dry_run_messages = [str(call) for call in logger.info.call_args_list if "[DRY RUN]" in str(call)]
+            self.assertEqual(len(dry_run_messages), 1)
+            self.assertIn("b@example.com", dry_run_messages[0])
+
+    @patch("send_emails.EmailQueue")
+    @patch("send_emails.setup_logger")
     def test_send_campaign_reports_progress_callback(self, mock_logger_factory, mock_queue_cls):
         with tempfile.TemporaryDirectory() as tmpdir:
             authors_path = Path(tmpdir) / "authors.json"

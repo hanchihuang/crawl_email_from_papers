@@ -245,6 +245,33 @@ def merge_form_values(parsed: dict) -> dict:
     return values
 
 
+def parse_form_body(content_type: str, raw_body: bytes) -> dict:
+    if "multipart/form-data" in content_type:
+        values: dict[str, str] = {}
+        boundary_match = re.search(r"boundary=([^;]+)", content_type)
+        if not boundary_match:
+            return values
+        boundary = boundary_match.group(1).strip().strip('"')
+        delimiter = f"--{boundary}".encode("utf-8")
+        for part in raw_body.split(delimiter):
+            part = part.strip()
+            if not part or part == b"--":
+                continue
+            if b"\r\n\r\n" not in part:
+                continue
+            header_block, value_block = part.split(b"\r\n\r\n", 1)
+            headers = header_block.decode("utf-8", errors="ignore")
+            name_match = re.search(r'name="([^"]+)"', headers)
+            if not name_match:
+                continue
+            value = value_block.rstrip(b"\r\n-").decode("utf-8", errors="ignore")
+            values[name_match.group(1)] = value
+        return values
+
+    decoded = raw_body.decode("utf-8")
+    return {key: values[-1] for key, values in parse_qs(decoded, keep_blank_values=True).items()}
+
+
 def snapshot_job(job_id: str) -> dict:
     with JOB_LOCK:
         job = JOBS.get(job_id)
@@ -433,8 +460,8 @@ class CampaignHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed_url = urlparse(self.path)
         length = int(self.headers.get("Content-Length", "0"))
-        raw_body = self.rfile.read(length).decode("utf-8")
-        parsed = {key: values[-1] for key, values in parse_qs(raw_body, keep_blank_values=True).items()}
+        raw_body = self.rfile.read(length)
+        parsed = parse_form_body(self.headers.get("Content-Type", ""), raw_body)
         values = merge_form_values(parsed)
 
         if parsed_url.path == "/start":

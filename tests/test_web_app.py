@@ -7,6 +7,7 @@ from web_app import (
     append_job_log,
     html_to_plain_text,
     merge_form_values,
+    parse_form_body,
     render_page,
     run_campaign_from_form,
     snapshot_job,
@@ -26,6 +27,7 @@ class WebAppTest(unittest.TestCase):
                 "html_body": "<p>HTML body</p>",
                 "backend": "freemail",
                 "max_emails": "3",
+                "start_email_index": "5",
                 "delay": "2",
                 "from_name": "Tester",
                 "from_pool": "on",
@@ -39,6 +41,8 @@ class WebAppTest(unittest.TestCase):
         self.assertIn("HTML body", page)
         self.assertIn("Finished", page)
         self.assertIn('value="freemail"', page)
+        self.assertIn('name="start_email_index"', page)
+        self.assertIn('value="5"', page)
         self.assertIn('id="logBox"', page)
         self.assertIn("/start", page)
         self.assertIn("/status?job_id=", page)
@@ -55,6 +59,31 @@ class WebAppTest(unittest.TestCase):
         self.assertEqual(values["backend"], "smtp")
         self.assertNotIn("dry_run", values)
         self.assertNotIn("from_pool", values)
+
+    def test_parse_form_body_supports_multipart_formdata(self):
+        boundary = "----WebKitFormBoundaryTest"
+        raw_body = (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="subject"\r\n\r\n'
+            "Custom subject\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="body"\r\n\r\n'
+            "Custom body\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="html_body"\r\n\r\n'
+            "<p>Custom html</p>\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="dry_run"\r\n\r\n'
+            "on\r\n"
+            f"--{boundary}--\r\n"
+        ).encode("utf-8")
+
+        values = parse_form_body(f"multipart/form-data; boundary={boundary}", raw_body)
+
+        self.assertEqual(values["subject"], "Custom subject")
+        self.assertEqual(values["body"], "Custom body")
+        self.assertEqual(values["html_body"], "<p>Custom html</p>")
+        self.assertEqual(values["dry_run"], "on")
 
     @patch("web_app.send_campaign")
     @patch("web_app.build_campaign_sender")
@@ -80,6 +109,7 @@ class WebAppTest(unittest.TestCase):
                 "html_body": "<p>HTML body</p>",
                 "backend": "freemail",
                 "max_emails": "1",
+                "start_email_index": "10",
                 "delay": "0",
                 "from_name": "Tester",
                 "dry_run": "on",
@@ -88,6 +118,11 @@ class WebAppTest(unittest.TestCase):
 
         self.assertIn("sent=1", message)
         self.assertIn("INFO | Loaded authors", logs)
+        mock_send_campaign.assert_called_once()
+        self.assertEqual(mock_send_campaign.call_args.kwargs["start_index"], 10)
+        self.assertEqual(mock_send_campaign.call_args.kwargs["subject_template"], "Hello")
+        self.assertEqual(mock_send_campaign.call_args.kwargs["plain_template"], "Plain body")
+        self.assertEqual(mock_send_campaign.call_args.kwargs["html_template"], "<p>HTML body</p>")
         self.assertIn("Would send to", "\n".join(logs))
 
     @patch("web_app.send_campaign")

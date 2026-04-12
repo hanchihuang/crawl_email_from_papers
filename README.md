@@ -1,19 +1,19 @@
 # Quant Finance Email Crawler
 
-自动从多个学术来源抓取量化金融论文，提取作者邮箱，并支持一键海量自动发邮件，用于科研合作 outreach。
+默认面向高频交易（HFT）相关论文抓取作者邮箱，并支持一键海量自动发邮件，用于科研合作 outreach。
 
 ## 当前已启用的数据源
 
 | 来源 | 说明 | 状态 |
 |------|------|------|
-| arXiv | 量化金融 (q-fin.*)、经济学 (econ.GN) 分类 | 已启用 |
+| arXiv | 默认抓取高频交易相关分类与关键词（`q-fin.TR`、`q-fin.ST`、`q-fin.CP`、`cs.LG`、`stat.ML`） | 已启用 |
 | Crossref | 学术论文元数据与 DOI 检索 | 已启用 |
 | Google Scholar | 作为邮箱补充查找渠道，不是主抓取源 | 辅助启用 |
 
 说明：
 
 - `SSRN` 和 `RePEc` 代码文件目前存在，但默认没有加入实际运行管线
-- README 以下说明均以“当前默认启用 arXiv + Crossref”为准
+- README 以下说明均以“当前默认启用 arXiv + Crossref，且 arXiv 主题默认聚焦 HFT”为准
 
 ## 快速开始
 

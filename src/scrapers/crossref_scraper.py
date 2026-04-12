@@ -1,4 +1,4 @@
-"""Crossref API scraper - excellent for finding academic paper author emails."""
+"""Crossref API scraper focused on high-frequency trading papers."""
 import re
 import time
 import urllib.parse
@@ -11,12 +11,13 @@ class CrossrefScraper(BaseScraper):
 
     BASE_URL = "https://api.crossref.org"
 
-    FINANCE_KEYWORDS = [
-        "quantitative", "portfolio", "trading", "factor", "option", "risk",
-        "stock", "bond", "derivative", "investment", "volatility", "market",
-        "asset pricing", "returns", "high frequency", "algorithmic",
-        "machine learning", "deep learning", "reinforcement",
-        "crypto", "blockchain", "fintech", "esg", "sustainable",
+    HFT_KEYWORDS = [
+        "high frequency trading", "high-frequency trading", "high frequency",
+        "algorithmic trading", "electronic trading", "market microstructure",
+        "limit order book", "order book", "order flow", "tick data",
+        "market making", "optimal execution", "latency arbitrage",
+        "ultra low latency", "liquidity", "bid ask spread", "bid-ask spread",
+        "mid price", "mid-price", "microprice", "intraday",
     ]
 
     def __init__(self, rate_limiter=None, **kwargs):
@@ -27,20 +28,20 @@ class CrossrefScraper(BaseScraper):
 
     def fetch_papers(
         self, max_results: int = 100,
-        query: str = "quantitative finance",
+        query: str = "high frequency trading",
         filter_type: str = "journal-article",
         **kwargs
     ) -> list[PaperInfo]:
         papers: list[PaperInfo] = []
 
-        # Try multiple finance-related search queries
+        # Try multiple HFT-related search queries.
         queries = [
-            "quantitative finance trading",
-            "portfolio optimization machine learning",
-            "financial machine learning",
-            "asset pricing factor models",
-            "option pricing derivatives",
-            "risk management algorithmic trading",
+            "high frequency trading",
+            "market microstructure limit order book",
+            "algorithmic trading optimal execution",
+            "electronic market making",
+            "latency arbitrage order flow",
+            "intraday price impact tick data",
         ]
 
         for q in queries:
@@ -49,12 +50,15 @@ class CrossrefScraper(BaseScraper):
             self.log("INFO", f"Crossref search: {q}")
             batch = self._search_crossref(q, max_results - len(papers))
             for p in batch:
-                if p.paper_id not in self._processed_ids:
+                combined = (p.title + " " + p.abstract).lower()
+                if p.paper_id not in self._processed_ids and any(
+                    kw in combined for kw in self.HFT_KEYWORDS
+                ):
                     papers.append(p)
                     self._processed_ids.add(p.paper_id)
             time.sleep(self._random_sleep())
 
-        self.log("INFO", f"Fetched {len(papers)} papers from Crossref")
+        self.log("INFO", f"Fetched {len(papers)} high-frequency trading papers from Crossref")
         return papers
 
     def _search_crossref(self, query: str, limit: int) -> list[PaperInfo]:
@@ -127,7 +131,7 @@ class CrossrefScraper(BaseScraper):
                 url=URL,
                 pdf_url=None,
                 published_date=published,
-                categories=["finance"],
+                categories=["high-frequency-trading"],
             )
         except Exception:
             return None

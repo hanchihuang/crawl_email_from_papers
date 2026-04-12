@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Quant Finance Email Crawler
-Automatically scrape quantitative finance papers, extract author emails.
+High-Frequency Trading Email Crawler
+Automatically scrape high-frequency trading papers and extract author emails.
 """
 import os
 import sys
@@ -22,10 +22,10 @@ from src.crawler import QuantFinanceEmailCrawler
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Quant Finance Email Crawler")
+    parser = argparse.ArgumentParser(description="High-Frequency Trading Email Crawler")
     parser.add_argument(
-        "--max-papers", type=int, default=100,
-        help="Max papers per source (default: 100)"
+        "--max-papers", type=int, default=5000,
+        help="Max papers per source (default: 5000)"
     )
     parser.add_argument(
         "--skip-pdf", action="store_true",
@@ -67,8 +67,8 @@ def main():
         sender = EmailSender(cfg.SMTP_HOST, cfg.SMTP_PORT, cfg.SMTP_USER, cfg.SMTP_PASSWORD, rl)
         success = sender.send_email(
             cfg.SMTP_USER,
-            "Test from Quant Finance Crawler",
-            "This is a test email from the Quant Finance Email Crawler system.",
+            "Test from HFT Crawler",
+            "This is a test email from the High-Frequency Trading Email Crawler system.",
         )
         print(f"Test email {'sent' if success else 'failed'}")
         return
@@ -77,7 +77,7 @@ def main():
     crawler = QuantFinanceEmailCrawler(cfg)
 
     print("=" * 60)
-    print("  Quant Finance Email Crawler")
+    print("  High-Frequency Trading Email Crawler")
     print("  ===============================")
     print(f"  arXiv categories : {', '.join(cfg.ARXIV_CATEGORIES)}")
     print(f"  Max papers/source : {args.max_papers}")

@@ -103,7 +103,7 @@ class QuantFinanceEmailCrawler:
         extract_from_pdfs: bool = True,
     ) -> dict:
         self.logger.info("=" * 60)
-        self.logger.info("Starting Quant Finance Email Crawler Pipeline")
+        self.logger.info("Starting High-Frequency Trading Email Crawler Pipeline")
         self.logger.info("=" * 60)
 
         results = {
@@ -163,7 +163,8 @@ class QuantFinanceEmailCrawler:
                         # Record authors - only first author gets the email (avoids shared inbox noise)
                         if result.get("emails") and not result.get("skipped"):
                             results["papers_with_emails"] += 1
-                            first_author = result.get("authors", [None])[0]
+                            authors = result.get("authors") or []
+                            first_author = authors[0] if authors else None
                             if first_author:
                                 before = self.author_db.count()
                                 self.author_db.add_author(
