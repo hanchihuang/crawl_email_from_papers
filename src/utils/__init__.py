@@ -31,8 +31,15 @@ def setup_logger(name: str, log_file, level: str = "INFO") -> logging.Logger:
 class RateLimiter:
     """Simple rate limiter for HTTP requests and email sending."""
 
-    def __init__(self, requests_per_minute: int = 30):
+    def __init__(
+        self,
+        requests_per_minute: int = 30,
+        max_emails_per_hour: int = 50,
+        on_wait: Optional[callable] = None,
+    ):
         self.rpm = requests_per_minute
+        self.max_emails_per_hour = max_emails_per_hour
+        self.on_wait = on_wait
         self.window: list[float] = []
         self._lock = False
 
@@ -45,11 +52,14 @@ class RateLimiter:
         self.window.append(time.time())
         time.sleep(random.uniform(0.3, 1.5))
 
-    def email_wait(self, max_per_hour: int = 50) -> None:
+    def email_wait(self, max_per_hour: Optional[int] = None) -> None:
+        hourly_limit = max_per_hour or self.max_emails_per_hour
         now = time.time()
         self.window = [t for t in self.window if now - t < 3600]
-        if len(self.window) >= max_per_hour:
+        if len(self.window) >= hourly_limit:
             sleep_time = 3600 - (now - self.window[0]) + random.uniform(5, 15)
+            if self.on_wait:
+                self.on_wait("email", max(1, sleep_time), len(self.window), hourly_limit)
             time.sleep(max(1, sleep_time))
         self.window.append(time.time())
         time.sleep(random.uniform(3, 8))

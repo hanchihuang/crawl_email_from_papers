@@ -169,7 +169,10 @@ def extract_author_email(author: dict) -> str:
 
 
 def build_campaign_sender(backend: str, smtp_config: dict, freemail_config: dict, sender_pool: SenderPool | None):
-    rate_limiter = RateLimiter()
+    rate_limiter = RateLimiter(
+        requests_per_minute=cfg.MAX_REQUESTS_PER_MINUTE,
+        max_emails_per_hour=cfg.MAX_EMAILS_PER_HOUR,
+    )
     if backend == "freemail":
         if not freemail_config.get("api_url") or not freemail_config.get("api_key"):
             raise ValueError("Freemail backend requires FREEMAIL_API and FREEMAIL_API_KEY/FREEMAIL_TOKEN")
@@ -217,12 +220,25 @@ def send_campaign(
 ):
     logger = setup_logger("email_sender", cfg.LOG_FILE)
     queue = EmailQueue(cfg.EMAIL_QUEUE_FILE)
+    rate_limiter = getattr(sender, "rate_limiter", None)
 
     def emit(level: str, message: str):
         log_method = getattr(logger, level)
         log_method(message)
         if progress_callback:
             progress_callback(level.upper(), message)
+
+    if rate_limiter:
+        def log_wait(kind: str, seconds: float, current: int, limit: int) -> None:
+            if kind != "email":
+                return
+            emit(
+                "info",
+                f"Rate limit reached: {current}/{limit} emails in the last hour, "
+                f"waiting {int(round(seconds))}s before continuing",
+            )
+
+        rate_limiter.on_wait = log_wait
 
     authors = normalize_authors(load_json(authors_file))
     emit("info", f"Loaded {len(authors)} authors from {authors_file}")

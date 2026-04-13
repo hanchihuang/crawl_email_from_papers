@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import requests
+from src.utils.config import cfg
 from src.emailer.sender import FreemailSender
 
 from send_emails import (
@@ -80,6 +81,7 @@ class SendEmailsHelpersTest(unittest.TestCase):
         self.assertEqual(pool.next_email(), "one@ai-tool.indevs.in")
         self.assertEqual(pool.next_email(), "two@ai-tool.indevs.in")
         self.assertEqual(sender.__class__.__name__, "FreemailSender")
+        self.assertEqual(sender.rate_limiter.max_emails_per_hour, cfg.MAX_EMAILS_PER_HOUR)
 
     def test_render_templates_uses_overrides(self):
         subject, body, html = render_templates(
