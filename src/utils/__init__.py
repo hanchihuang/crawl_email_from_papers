@@ -34,7 +34,7 @@ class RateLimiter:
     def __init__(
         self,
         requests_per_minute: int = 30,
-        max_emails_per_hour: int = 50,
+        max_emails_per_hour: int = 0,
         on_wait: Optional[callable] = None,
     ):
         self.rpm = requests_per_minute
@@ -53,7 +53,9 @@ class RateLimiter:
         time.sleep(random.uniform(0.3, 1.5))
 
     def email_wait(self, max_per_hour: Optional[int] = None) -> None:
-        hourly_limit = max_per_hour or self.max_emails_per_hour
+        hourly_limit = self.max_emails_per_hour if max_per_hour is None else max_per_hour
+        if hourly_limit <= 0:
+            return
         now = time.time()
         self.window = [t for t in self.window if now - t < 3600]
         if len(self.window) >= hourly_limit:

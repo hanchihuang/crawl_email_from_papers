@@ -12,7 +12,7 @@
 
 说明：
 
-- `SSRN` 和 `RePEc` 代码文件目前存在，但默认没有加入实际运行管线
+- `SSRN`、`RePEc` 和 `Semantic Scholar` 代码文件目前存在，但默认没有加入实际运行管线
 - README 以下说明均以“当前默认启用 arXiv + Crossref，且 arXiv 主题默认聚焦 HFT”为准
 
 ## 快速开始
@@ -35,14 +35,14 @@ SMTP 推荐使用 Gmail + App Password，或 SendGrid / AWS SES。
 ### 3. 运行爬虫
 
 ```bash
-# 默认抓取（每个源最多 100 篇，不下载 PDF）
+# 默认抓取（每个源最多 5000 篇，默认会下载 PDF 并尝试提取正文邮箱）
 python run_crawler.py
 
-# 增加论文数量
-python run_crawler.py --max-papers 200
+# 只做元数据提取，不下载 PDF
+python run_crawler.py --skip-pdf
 
-# 下载 PDF 并从中提取邮箱
-python run_crawler.py --max-papers 100
+# 限制每个来源抓取数量
+python run_crawler.py --max-papers 200
 
 # 强制清理已下载的论文
 python run_crawler.py --force-cleanup
@@ -54,11 +54,14 @@ python run_crawler.py --check-disk
 ### 4. 发送邮件
 
 ```bash
-# 先 dry-run 查看效果
+# 先 dry-run 查看效果（CLI 默认 backend=smtp）
 python send_emails.py --dry-run --max 10
 
-# 确认无误后正式发送
-python send_emails.py --live --max 50
+# 使用 SMTP 正式发送
+python send_emails.py --live --backend smtp --max 50
+
+# 使用 freemail API 正式发送
+python send_emails.py --live --backend freemail --max 50
 ```
 
 ### 4.1 一键发送邮件
@@ -67,7 +70,7 @@ python send_emails.py --live --max 50
 
 ```bash
 # 命令行一键群发
-python send_emails.py --live --max 50
+python send_emails.py --live --backend smtp --max 50
 
 # 启动本地网页控制台，一键点击执行群发
 python web_app.py
@@ -78,7 +81,7 @@ python web_app.py
 支持：
 
 - `SMTP` 直连发送
-- `freemail` API 发送
+- `freemail` API 发送（网页端默认优先）
 - `dry-run` 预演
 - 发件池轮换发送
 
@@ -90,7 +93,7 @@ python send_emails.py --dry-run --max 10
 
 ### 4.2 一键 push GitHub
 
-当前目录默认不是 Git 仓库；如果你要把这个项目一键推到 GitHub，先完成一次初始化或接入已有远端。
+如果你要把这个项目首次推到自己的 GitHub，先完成一次初始化或接入已有远端。
 
 首次初始化示例：
 
@@ -138,7 +141,7 @@ git add . && git commit -m "update" && git push
 
 ## 邮件发送频率控制
 
-- 默认每小时最多 50 封 (MAX_EMAILS_PER_HOUR)
+- 默认关闭每小时邮件上限，`MAX_EMAILS_PER_HOUR=0` 表示不限量
 - 每封邮件间隔 3-8 秒随机延迟
 - 支持 Gmail/App Password、SMTP relay、SendGrid 等任何 SMTP 服务
 

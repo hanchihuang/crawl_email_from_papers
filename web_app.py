@@ -17,8 +17,10 @@ from send_emails import (
     PLAIN_TEMPLATE,
     SenderPool,
     build_campaign_sender,
+    filter_sender_pool_by_domain,
     load_freemail_config,
     load_sender_pool,
+    sender_email_domain,
     send_campaign,
 )
 from src.utils.config import cfg
@@ -341,7 +343,20 @@ def run_campaign_from_form(values: dict, progress_callback=None) -> tuple[str, l
         emails = load_sender_pool(Path(values.get("from_pool_path", str(DEFAULT_ITICK_POOL))))
         if not emails:
             raise ValueError("发件池没有可用邮箱")
-        sender_pool = SenderPool(emails)
+        allowed_domains = {sender_email_domain(freemail_config.get("from_email", ""))}
+        filtered_emails, rejected_emails = filter_sender_pool_by_domain(emails, allowed_domains)
+        if rejected_emails:
+            rejected_domains = sorted({sender_email_domain(email) or "invalid" for email in rejected_emails})
+            capture_log(
+                "WARNING",
+                "发件池已过滤不匹配域名的地址: "
+                + ", ".join(rejected_domains)
+                + f"；仅允许域名: {', '.join(sorted(domain for domain in allowed_domains if domain))}",
+            )
+        if filtered_emails:
+            sender_pool = SenderPool(filtered_emails)
+        else:
+            capture_log("WARNING", "发件池中没有与当前 freemail 域名匹配的地址，回退到默认发件邮箱")
 
     if backend == "freemail" and not freemail_is_configured(freemail_config):
         if smtp_is_configured():

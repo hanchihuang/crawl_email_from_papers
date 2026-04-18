@@ -135,8 +135,34 @@ def load_sender_pool(csv_path: Path) -> list[str]:
     for email in emails:
         if email not in seen:
             seen.add(email)
-        deduped.append(email)
+            deduped.append(email)
     return deduped
+
+
+def sender_email_domain(email: str) -> str:
+    parts = str(email or "").strip().rsplit("@", 1)
+    if len(parts) != 2:
+        return ""
+    return parts[1].lower()
+
+
+def filter_sender_pool_by_domain(emails: list[str], allowed_domains: set[str]) -> tuple[list[str], list[str]]:
+    normalized_domains = {
+        domain.strip().lower()
+        for domain in allowed_domains
+        if domain and domain.strip()
+    }
+    if not normalized_domains:
+        return list(emails), []
+
+    accepted: list[str] = []
+    rejected: list[str] = []
+    for email in emails:
+        if sender_email_domain(email) in normalized_domains:
+            accepted.append(email)
+        else:
+            rejected.append(email)
+    return accepted, rejected
 
 
 def normalize_authors(authors_payload) -> list[dict]:

@@ -10,11 +10,13 @@ from send_emails import (
     SenderPool,
     build_campaign_sender,
     extract_author_email,
+    filter_sender_pool_by_domain,
     normalize_authors,
     render_templates,
     send_campaign,
     load_freemail_config,
     load_sender_pool,
+    sender_email_domain,
 )
 
 
@@ -60,6 +62,38 @@ class SendEmailsHelpersTest(unittest.TestCase):
 
             self.assertEqual(emails, ["a1@ai-tool.indevs.in", "a2@ai-tool.indevs.in"])
 
+    def test_load_sender_pool_deduplicates_addresses(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir) / "itick.csv"
+            csv_path.write_text(
+                "\n".join(
+                    [
+                        "邮箱,密码,API Key",
+                        "a1@ai-tool.indevs.in,pwd,key1",
+                        "a1@ai-tool.indevs.in,pwd,key1",
+                        "a2@ai-tool.indevs.in,pwd,key2",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            emails = load_sender_pool(csv_path)
+
+            self.assertEqual(emails, ["a1@ai-tool.indevs.in", "a2@ai-tool.indevs.in"])
+
+    def test_filter_sender_pool_by_domain_rejects_wrong_domain(self):
+        accepted, rejected = filter_sender_pool_by_domain(
+            ["ok@ai-tool.indevs.in", "bad@duck.com"],
+            {"ai-tool.indevs.in"},
+        )
+
+        self.assertEqual(accepted, ["ok@ai-tool.indevs.in"])
+        self.assertEqual(rejected, ["bad@duck.com"])
+
+    def test_sender_email_domain_handles_invalid_email(self):
+        self.assertEqual(sender_email_domain("bad-email"), "")
+        self.assertEqual(sender_email_domain("ok@ai-tool.indevs.in"), "ai-tool.indevs.in")
+
     def test_sender_selection_uses_rotating_from_pool_for_freemail(self):
         pool = SenderPool(["one@ai-tool.indevs.in", "two@ai-tool.indevs.in"])
 
@@ -82,6 +116,18 @@ class SendEmailsHelpersTest(unittest.TestCase):
         self.assertEqual(pool.next_email(), "two@ai-tool.indevs.in")
         self.assertEqual(sender.__class__.__name__, "FreemailSender")
         self.assertEqual(sender.rate_limiter.max_emails_per_hour, cfg.MAX_EMAILS_PER_HOUR)
+
+    def test_rate_limiter_disables_hourly_email_limit_when_zero(self):
+        from src.utils import RateLimiter
+
+        limiter = RateLimiter(max_emails_per_hour=0)
+        limiter.window = [1.0, 2.0, 3.0]
+
+        with patch("src.utils.time.sleep") as mock_sleep:
+            limiter.email_wait()
+
+        mock_sleep.assert_not_called()
+        self.assertEqual(limiter.window, [1.0, 2.0, 3.0])
 
     def test_render_templates_uses_overrides(self):
         subject, body, html = render_templates(

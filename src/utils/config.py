@@ -25,7 +25,7 @@ class Config:
         ).split(",")
     ]
 
-    MAX_EMAILS_PER_HOUR = int(os.getenv("MAX_EMAILS_PER_HOUR", "50"))
+    MAX_EMAILS_PER_HOUR = int(os.getenv("MAX_EMAILS_PER_HOUR", "0"))
     MAX_REQUESTS_PER_MINUTE = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "30"))
 
     DELETE_PAPERS_AFTER_EXTRACT = os.getenv("DELETE_PAPERS_AFTER_EXTRACT", "true").lower() == "true"

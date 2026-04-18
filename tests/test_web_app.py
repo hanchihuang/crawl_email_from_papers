@@ -125,6 +125,94 @@ class WebAppTest(unittest.TestCase):
         self.assertEqual(mock_send_campaign.call_args.kwargs["html_template"], "<p>HTML body</p>")
         self.assertIn("Would send to", "\n".join(logs))
 
+    @patch("web_app.load_sender_pool")
+    @patch("web_app.send_campaign")
+    @patch("web_app.build_campaign_sender")
+    @patch("web_app.load_freemail_config")
+    def test_run_campaign_from_form_filters_sender_pool_domains(
+        self,
+        mock_freemail,
+        mock_builder,
+        mock_send_campaign,
+        mock_load_sender_pool,
+    ):
+        mock_freemail.return_value = {
+            "api_url": "https://mail.example.com",
+            "api_key": "token",
+            "from_email": "bot@ai-tool.indevs.in",
+            "from_name": "Bot Sender",
+        }
+        mock_builder.return_value = (object(), {"backend": "freemail"})
+        mock_load_sender_pool.return_value = ["bad@duck.com", "ok@ai-tool.indevs.in"]
+
+        def fake_send_campaign(**kwargs):
+            kwargs["progress_callback"]("INFO", "[DRY RUN] Would send to: A <a@example.com>")
+            return {"sent": 1, "failed": 0, "remaining": 0}
+
+        mock_send_campaign.side_effect = fake_send_campaign
+
+        _, logs = run_campaign_from_form(
+            {
+                "subject": "Hello",
+                "body": "Plain body",
+                "html_body": "<p>HTML body</p>",
+                "backend": "freemail",
+                "max_emails": "1",
+                "delay": "0",
+                "from_name": "Tester",
+                "from_pool": "on",
+                "dry_run": "on",
+            }
+        )
+
+        sender_pool = mock_send_campaign.call_args.kwargs["sender_pool"]
+        self.assertEqual(sender_pool.size(), 1)
+        self.assertEqual(sender_pool.next_email(), "ok@ai-tool.indevs.in")
+        self.assertTrue(any("duck.com" in line for line in logs))
+
+    @patch("web_app.load_sender_pool")
+    @patch("web_app.send_campaign")
+    @patch("web_app.build_campaign_sender")
+    @patch("web_app.load_freemail_config")
+    def test_run_campaign_from_form_falls_back_when_sender_pool_has_no_allowed_domain(
+        self,
+        mock_freemail,
+        mock_builder,
+        mock_send_campaign,
+        mock_load_sender_pool,
+    ):
+        mock_freemail.return_value = {
+            "api_url": "https://mail.example.com",
+            "api_key": "token",
+            "from_email": "bot@ai-tool.indevs.in",
+            "from_name": "Bot Sender",
+        }
+        mock_builder.return_value = (object(), {"backend": "freemail"})
+        mock_load_sender_pool.return_value = ["bad@duck.com"]
+
+        def fake_send_campaign(**kwargs):
+            kwargs["progress_callback"]("INFO", "[DRY RUN] Would send to: A <a@example.com>")
+            return {"sent": 1, "failed": 0, "remaining": 0}
+
+        mock_send_campaign.side_effect = fake_send_campaign
+
+        _, logs = run_campaign_from_form(
+            {
+                "subject": "Hello",
+                "body": "Plain body",
+                "html_body": "<p>HTML body</p>",
+                "backend": "freemail",
+                "max_emails": "1",
+                "delay": "0",
+                "from_name": "Tester",
+                "from_pool": "on",
+                "dry_run": "on",
+            }
+        )
+
+        self.assertIsNone(mock_send_campaign.call_args.kwargs["sender_pool"])
+        self.assertTrue(any("回退到默认发件邮箱" in line for line in logs))
+
     @patch("web_app.send_campaign")
     @patch("web_app.build_campaign_sender")
     @patch("web_app.smtp_is_configured", return_value=False)
